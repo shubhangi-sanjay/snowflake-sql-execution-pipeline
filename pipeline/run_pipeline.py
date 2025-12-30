@@ -25,7 +25,9 @@ conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
 cursor = conn.cursor()
 
 # ------------------- EXECUTE SQL FILES -------------------
-sql_dir = Path("../sql")
+df = None  # IMPORTANT: initialize
+
+sql_dir = Path("sql")  # also FIXED for GitHub Actions
 
 for sql_file in sorted(sql_dir.glob("*.sql")):
     with open(sql_file) as f:
@@ -34,9 +36,13 @@ for sql_file in sorted(sql_dir.glob("*.sql")):
     print(f"Executing: {sql_file.name}")
     cursor.execute(query)
 
-    # Capture SELECT result
     if query.lower().startswith("select"):
         df = cursor.fetch_pandas_all()
+
+# ---- SAFETY CHECK ----
+if df is None:
+    raise RuntimeError("No SELECT query executed. Cannot generate Excel.")
+
 
 # ------------------- SAVE RESULT -------------------
 output_file = "employee_data.xlsx"
