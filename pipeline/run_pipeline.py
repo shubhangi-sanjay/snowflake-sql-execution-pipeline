@@ -8,7 +8,7 @@ from email.message import EmailMessage
 SNOWFLAKE_CONFIG = {
     "user": "shubhi123",
     "password": "Shubhangi@12345",
-    "account": "KG58098",
+    "account": "IEFGLJG-KG58098",
     "warehouse": "COMPUTE_WH",
     "database": "GIT_COLLAB",
     "schema": "GIT_SCHEMA"
