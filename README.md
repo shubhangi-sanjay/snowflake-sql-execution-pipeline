@@ -1,1 +1,1 @@
-This is CI CD automation
+This is CI/CD pipeline automation
