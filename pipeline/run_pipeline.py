@@ -15,9 +15,9 @@ SNOWFLAKE_CONFIG = {
 }
 
 EMAIL_CONFIG = {
-    "sender": "shubhangi.sanjay@accenture.com",
+    "sender": "shubhangi.sanjay2010@gmail.com",
     "receiver": "shubhangi.sanjay@accenture.com",
-    "password": "APP_PASSWORD"
+    "password": "ascpruzkntwkjses"
 }
 
 # ------------------- CONNECT -------------------
