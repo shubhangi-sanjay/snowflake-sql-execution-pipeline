@@ -3,12 +3,13 @@ import pandas as pd
 from pathlib import Path
 import smtplib
 from email.message import EmailMessage
+import json
 
 # ------------------- CONFIG -------------------
 SNOWFLAKE_CONFIG = {
     "user": "shubhi123",
-    "password": "Shubhangi@12345",
-    "account": "IEFGLJG-KG58098",   # keep as-is since it works for you
+    "password": "Shubhangi@12345",        # move to env vars later
+    "account": "IEFGLJG-KG58098",
     "warehouse": "COMPUTE_WH",
     "database": "GIT_COLLAB",
     "schema": "GIT_SCHEMA"
@@ -17,78 +18,109 @@ SNOWFLAKE_CONFIG = {
 EMAIL_CONFIG = {
     "sender": "shubhangi.sanjay2010@gmail.com",
     "receiver": "shubhangi.sanjay@accenture.com",
-    "password": "ascpruzkntwkjses"  # Gmail App Password
+    "password": "ascpruzkntwkjses"         # Gmail App Password
 }
 
-# ------------------- STATE TRACKING (STEP 2) -------------------
-execution_status = {}   # sql_file -> SUCCESS | FAILED | SKIPPED
+# ------------------- PATHS -------------------
+sql_dir = Path("sql")
+metadata_file = sql_dir / "metadata.json"
 
-# ------------------- CONNECT -------------------
+# ------------------- LOAD METADATA -------------------
+with open(metadata_file) as f:
+    metadata = json.load(f)
+
+# ------------------- STATE TRACKING -------------------
+execution_status = {}   # script.sql -> SUCCESS | FAILED | SKIPPED
+df = None               # for SELECT output
+
+# ------------------- DEPENDENCY CHECK -------------------
+def dependencies_satisfied(script_name):
+    deps = metadata.get(script_name, {}).get("depends_on", [])
+    return all(execution_status.get(d) == "SUCCESS" for d in deps)
+
+# ------------------- CONNECT TO SNOWFLAKE -------------------
 conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
 cursor = conn.cursor()
 
-# ------------------- EXECUTE SQL FILES -------------------
-df = None  # IMPORTANT: initialize
-
-sql_dir = Path("sql")  # correct folder
-
+# ------------------- EXECUTE SCRIPTS -------------------
 for sql_file in sorted(sql_dir.glob("*.sql")):
-    print(f"Executing: {sql_file.name}")
+    script_name = sql_file.name
 
-    with open(sql_file) as f:
-        query = f.read().strip()
+    if script_name == "metadata.json":
+        continue
+
+    if not dependencies_satisfied(script_name):
+        execution_status[script_name] = "SKIPPED"
+        print(f"Skipped: {script_name} (dependency not satisfied)")
+        continue
+
+    print(f"Executing: {script_name}")
 
     try:
+        query = sql_file.read_text().strip()
         cursor.execute(query)
-        execution_status[sql_file.name] = "SUCCESS"
+        execution_status[script_name] = "SUCCESS"
 
-        # Capture SELECT result
         if query.lower().startswith("select"):
             df = cursor.fetch_pandas_all()
 
     except Exception as e:
-        execution_status[sql_file.name] = "FAILED"
-        print(f"❌ Failed: {sql_file.name}")
+        execution_status[script_name] = "FAILED"
+        print(f"Failed: {script_name}")
         print(str(e))
-        break   # stop execution for now (dependency logic comes next)
+
+        rollback_file = sql_dir / f"rollback_{script_name}"
+        if rollback_file.exists():
+            print(f"Running rollback: {rollback_file.name}")
+            cursor.execute(rollback_file.read_text())
+
+        # continue execution (agentic behavior)
 
 # ------------------- EXECUTION SUMMARY -------------------
-print("Execution summary:", execution_status)
+print("\nExecution Summary:")
+for k, v in execution_status.items():
+    print(f"{k}: {v}")
 
-# ------------------- SAFETY CHECK -------------------
-if df is None:
-    raise RuntimeError("No SELECT query executed. Cannot generate Excel.")
+# ------------------- SAVE SELECT RESULT -------------------
+output_file = None
+if df is not None:
+    output_file = "employee_data.xlsx"
+    df.to_excel(output_file, index=False)
 
-# ------------------- SAVE RESULT -------------------
-output_file = "employee_data.xlsx"
-df.to_excel(output_file, index=False)
+# ------------------- EMAIL SUBJECT -------------------
+failed_scripts = [k for k, v in execution_status.items() if v == "FAILED"]
+subject = "Snowflake Pipeline Failed" if failed_scripts else "Snowflake Pipeline Succeeded"
 
 # ------------------- SEND EMAIL -------------------
 msg = EmailMessage()
-msg["Subject"] = "Employee Report from Snowflake"
+msg["Subject"] = subject
 msg["From"] = EMAIL_CONFIG["sender"]
 msg["To"] = EMAIL_CONFIG["receiver"]
 
 msg.set_content(
     f"""
-Pipeline Execution Summary:
+Snowflake Pipeline Execution Summary:
 
 {execution_status}
 
-Attached is the employee data extracted from Snowflake.
+Failed Scripts:
+{failed_scripts if failed_scripts else 'None'}
+
+Please find the attached report if generated.
 """
 )
 
-with open(output_file, "rb") as f:
-    msg.add_attachment(
-        f.read(),
-        maintype="application",
-        subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename=output_file
-    )
+if output_file:
+    with open(output_file, "rb") as f:
+        msg.add_attachment(
+            f.read(),
+            maintype="application",
+            subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            filename=output_file
+        )
 
 with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
     smtp.login(EMAIL_CONFIG["sender"], EMAIL_CONFIG["password"])
     smtp.send_message(msg)
 
-print("✅ Pipeline executed successfully")
+print("Pipeline completed successfully")
