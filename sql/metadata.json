@@ -1,18 +1,17 @@
 {
   "01_create_employee.sql": {
-    "depends_on": [],
-    "rollback": "rollback/01_drop_employee.sql"
+    "depends_on": []
   },
-  "02_alter_add_address.sql": {
-    "depends_on": ["01_create_employee.sql"],
-    "rollback": "rollback/02_remove_address.sql"
+  "02_fail_script.sql": {
+    "depends_on": ["01_create_employee.sql"]
   },
   "03_insert_employee.sql": {
-    "depends_on": ["01_create_employee.sql"],
-    "rollback": "rollback/03_delete_employee.sql"
+    "depends_on": ["01_create_employee.sql"]
   },
   "04_select_employee.sql": {
-    "depends_on": ["03_insert_employee.sql"],
-    "rollback": null
+    "depends_on": ["03_insert_employee.sql"]
+  },
+  "05_another_script.sql": {
+    "depends_on": ["01_create_employee.sql"]
   }
 }
