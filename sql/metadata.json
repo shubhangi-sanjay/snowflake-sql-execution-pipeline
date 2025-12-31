@@ -2,16 +2,16 @@
   "01_create_employee.sql": {
     "depends_on": []
   },
-  "02_fail_script.sql": {
+  "02_add_department.sql": {
     "depends_on": ["01_create_employee.sql"]
   },
-  "03_insert_employee.sql": {
-    "depends_on": ["01_create_employee.sql"]
+  "03_fail_script.sql": {
+    "depends_on": ["02_add_department.sql"]
   },
-  "04_select_employee.sql": {
-    "depends_on": ["03_insert_employee.sql"]
+  "04_insert_employee.sql": {
+    "depends_on": ["02_add_department.sql"]
   },
-  "05_another_script.sql": {
-    "depends_on": ["01_create_employee.sql"]
+  "05_select_employee.sql": {
+    "depends_on": ["02_add_department.sql"]
   }
 }
