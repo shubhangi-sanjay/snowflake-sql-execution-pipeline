@@ -8,7 +8,7 @@ from email.message import EmailMessage
 SNOWFLAKE_CONFIG = {
     "user": "shubhi123",
     "password": "Shubhangi@12345",
-    "account": "IEFGLJG-KG58098",
+    "account": "IEFGLJG-KG58098",   # keep as-is since it works for you
     "warehouse": "COMPUTE_WH",
     "database": "GIT_COLLAB",
     "schema": "GIT_SCHEMA"
@@ -17,8 +17,11 @@ SNOWFLAKE_CONFIG = {
 EMAIL_CONFIG = {
     "sender": "shubhangi.sanjay2010@gmail.com",
     "receiver": "shubhangi.sanjay@accenture.com",
-    "password": "ascpruzkntwkjses"
+    "password": "ascpruzkntwkjses"  # Gmail App Password
 }
+
+# ------------------- STATE TRACKING (STEP 2) -------------------
+execution_status = {}   # sql_file -> SUCCESS | FAILED | SKIPPED
 
 # ------------------- CONNECT -------------------
 conn = snowflake.connector.connect(**SNOWFLAKE_CONFIG)
@@ -27,22 +30,34 @@ cursor = conn.cursor()
 # ------------------- EXECUTE SQL FILES -------------------
 df = None  # IMPORTANT: initialize
 
-sql_dir = Path("sql")  # also FIXED for GitHub Actions
+sql_dir = Path("sql")  # correct folder
 
 for sql_file in sorted(sql_dir.glob("*.sql")):
+    print(f"Executing: {sql_file.name}")
+
     with open(sql_file) as f:
         query = f.read().strip()
 
-    print(f"Executing: {sql_file.name}")
-    cursor.execute(query)
+    try:
+        cursor.execute(query)
+        execution_status[sql_file.name] = "SUCCESS"
 
-    if query.lower().startswith("select"):
-        df = cursor.fetch_pandas_all()
+        # Capture SELECT result
+        if query.lower().startswith("select"):
+            df = cursor.fetch_pandas_all()
 
-# ---- SAFETY CHECK ----
+    except Exception as e:
+        execution_status[sql_file.name] = "FAILED"
+        print(f"❌ Failed: {sql_file.name}")
+        print(str(e))
+        break   # stop execution for now (dependency logic comes next)
+
+# ------------------- EXECUTION SUMMARY -------------------
+print("Execution summary:", execution_status)
+
+# ------------------- SAFETY CHECK -------------------
 if df is None:
     raise RuntimeError("No SELECT query executed. Cannot generate Excel.")
-
 
 # ------------------- SAVE RESULT -------------------
 output_file = "employee_data.xlsx"
@@ -53,7 +68,16 @@ msg = EmailMessage()
 msg["Subject"] = "Employee Report from Snowflake"
 msg["From"] = EMAIL_CONFIG["sender"]
 msg["To"] = EMAIL_CONFIG["receiver"]
-msg.set_content("Attached is the employee data extracted from Snowflake.")
+
+msg.set_content(
+    f"""
+Pipeline Execution Summary:
+
+{execution_status}
+
+Attached is the employee data extracted from Snowflake.
+"""
+)
 
 with open(output_file, "rb") as f:
     msg.add_attachment(
@@ -67,4 +91,4 @@ with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
     smtp.login(EMAIL_CONFIG["sender"], EMAIL_CONFIG["password"])
     smtp.send_message(msg)
 
-print("Pipeline executed successfully")
+print("✅ Pipeline executed successfully")
