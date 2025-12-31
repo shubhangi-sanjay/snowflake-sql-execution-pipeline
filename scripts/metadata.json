@@ -1,0 +1,18 @@
+{
+  "01_create_employee.sql": {
+    "depends_on": [],
+    "rollback": "rollback/01_drop_employee.sql"
+  },
+  "02_alter_add_address.sql": {
+    "depends_on": ["01_create_employee.sql"],
+    "rollback": "rollback/02_remove_address.sql"
+  },
+  "03_insert_employee.sql": {
+    "depends_on": ["01_create_employee.sql"],
+    "rollback": "rollback/03_delete_employee.sql"
+  },
+  "04_select_employee.sql": {
+    "depends_on": ["03_insert_employee.sql"],
+    "rollback": null
+  }
+}
